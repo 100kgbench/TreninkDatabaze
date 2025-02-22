@@ -68,9 +68,9 @@ namespace TreninkDatabaze
                     (
                         CvikId INTEGER PRIMARY KEY,
                         Jmeno TEXT,
-                        1x_PR INTEGER,
-                        5x_PR INTEGER,
-                        10x_PR INTEGER,
+                        PR_1x INTEGER,
+                        PR_5x INTEGER,
+                        PR_10x INTEGER,
                         PlanId INTEGER,
                         FOREIGN KEY (PlanId) REFERENCES Trenink_plan(Trenink_planId)
                     );
@@ -94,7 +94,9 @@ namespace TreninkDatabaze
                     CREATE TABLE IF NOT EXISTS Trenink 
                     (
                         TreninkId INTEGER PRIMARY KEY,
-                        Datum TEXT,
+                        PocetTreninku INTEGER,
+                        CvikId INTEGER,
+                        PlanId INTEGER,
                         FOREIGN KEY (CvikId) REFERENCES Cvik(CvikId),
                         FOREIGN KEY (PlanId) REFERENCES Trenink_plan(Trenink_planId)
                     );
@@ -104,7 +106,7 @@ namespace TreninkDatabaze
                 }
             }
         }
-        public async Task AddTreninkPlanAsync(string typ, string partie)
+        public async Task AddTreninkPlanAsync(string jmeno, string typ, string partie)
         {
             await using (_connection = new SqliteConnection(_connectionString))
             {
@@ -139,7 +141,7 @@ namespace TreninkDatabaze
                 {
                     command.CommandText =
                     @"
-                    INSERT INTO Cvik (Jmeno, 1x_PR, 5x_PR, 10x_PR, PlanId)
+                    INSERT INTO Cvik (Jmeno, PR_1x, PR_5x, PR_10x, PlanId)
                     VALUES (@jmeno, @pr1, @pr5, @pr10, @planId);
                     SELECT last_insert_rowid();
                      ";
@@ -156,7 +158,7 @@ namespace TreninkDatabaze
                 }
             }
         }
-        public async Task AddTreninkAsync(string datum, int cvikId, int planId)
+        public async Task AddTreninkAsync(int PocetTreninku, int cvikId, int planId)
         {
             await using (_connection = new SqliteConnection(_connectionString))
             {
@@ -165,11 +167,11 @@ namespace TreninkDatabaze
                 {
                     command.CommandText =
                     @"
-                    INSERT INTO Trenink (Datum, CvikId, PlanId)
-                    VALUES (@datum, @cvikId, @planId);
+                    INSERT INTO Trenink (PocetTreninku, CvikId, PlanId)
+                    VALUES (@pocetTreninku, @cvikId, @planId);
                     SELECT last_insert_rowid();
                      ";
-                    command.Parameters.Add("@datum", SqliteType.Text).Value = datum;
+                    command.Parameters.Add("@pocetTreninku", SqliteType.Integer).Value = PocetTreninku;
                     command.Parameters.Add("@cvikId", SqliteType.Integer).Value = cvikId;
                     command.Parameters.Add("@planId", SqliteType.Integer).Value = planId;
                     object? result = await command.ExecuteScalarAsync();
@@ -253,6 +255,48 @@ namespace TreninkDatabaze
                             var cvikId = reader.GetInt32(2);
                             var planId = reader.GetInt32(3);
                             Console.WriteLine($"TreninkId: {treninkId}, Datum: {datum}, CvikId: {cvikId}, PlanId: {planId}");
+                        }
+                    }
+                }
+            }
+        }
+        public async Task DropTable(string tableName)
+        {
+            await using (_connection = new SqliteConnection(_connectionString))
+            {
+                await _connection.OpenAsync();
+                await using (var command = _connection.CreateCommand())
+                {
+                    command.CommandText = $"DROP TABLE IF EXISTS {tableName};";
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+        }
+        public async Task TreninkJoin()
+        {
+            await using (_connection = new SqliteConnection(_connectionString))
+            {
+                await _connection.OpenAsync();
+                await using (var command = _connection.CreateCommand())
+                {
+                    command.CommandText =
+                    @"
+                    SELECT Trenink_plan.Jmeno, Trenink_plan.Partie, Trenink_plan.Typ, Cvik.Jmeno, Cvik.Pr_1x, Trenink.PocetTreninku
+                    FROM Trenink_plan
+                    JOIN Cvik ON Trenink_plan.Trenink_planId = Cvik.PlanId
+                    JOIN Trenink ON Cvik.CvikId = Trenink.CvikId;
+                    ";
+                    await using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var jmenoPlan = reader.GetString(0);
+                            var partie = reader.GetString(1);
+                            var typ = reader.GetString(2);
+                            var jmenoCvik = reader.GetString(3);
+                            var pr = reader.GetInt32(4);
+                            var pocetTreninku = reader.GetInt32(5);
+                            Console.WriteLine($"Jmeno Planu: {jmenoPlan}, Jmeno partie: {partie}, Typ treninku: {typ}, Jmeno cviku: {jmenoCvik}, PR: {pr}, Pocet odjeti daneho treniku: {pocetTreninku}");
                         }
                     }
                 }
